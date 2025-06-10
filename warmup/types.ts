@@ -30,7 +30,7 @@ export interface WithdrawalResult {
   };
 }
 
-export type WithdrawalError = {
+export interface WithdrawalError {
   code: "INSUFFICIENT_FUNDS" | "INVALID_AMOUNT" | "ACCOUNT_NOT_FOUND";
   message: string;
-};
+}
