@@ -1,9 +1,4 @@
-import {
-  BankAccount,
-  WithdrawalRequest,
-  WithdrawalResult,
-  WithdrawalError,
-} from "./types";
+import type { BankAccount, WithdrawalRequest, WithdrawalResult, WithdrawalError } from "./types";
 
 export function createAccount(account: BankAccount) {}
 
