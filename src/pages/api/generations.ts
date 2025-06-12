@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     // Initialize service and generate flashcards
     const generationService = new GenerationService(locals.supabase, {
-      apiKey: import.meta.env.OPENROUTER_API_KEY,
+      apiKey: "open-router-api-key",
     });
     const result = await generationService.generateFlashcards(body.source_text);
 
