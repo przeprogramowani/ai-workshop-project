@@ -7,7 +7,7 @@
 import crypto from "crypto";
 import type { FlashcardProposalDto, GenerationCreateResponseDto } from "../types";
 import type { SupabaseClient } from "../db/supabase.client";
-import { DEFAULT_USER_ID } from "../db/supabase.client";
+import { DEFAULT_USER_ID } from "../db/mock-data";
 import { OpenRouterService } from "./openrouter.service";
 import { OpenRouterError } from "./openrouter.types";
 
