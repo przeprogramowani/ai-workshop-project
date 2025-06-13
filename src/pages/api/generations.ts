@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { APIRoute } from "astro";
 import type { GenerateFlashcardsCommand } from "../../types";
 import { GenerationService } from "../../lib/generation.service";
+import { GenerationRepository } from "../../lib/generation.repository";
+import { createOpenRouterService } from "../../lib/factories/openrouter.factory";
 
 export const prerender = false;
 
@@ -34,9 +36,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     // Initialize service and generate flashcards
-    const generationService = new GenerationService(locals.supabase, {
-      apiKey: "open-router-api-key",
-    });
+    const openRouterApiKey = import.meta.env.OPENROUTER_API_KEY;
+    if (!openRouterApiKey) {
+      console.error("OpenRouter API key is not set.");
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const openRouterService = createOpenRouterService(openRouterApiKey);
+    const generationRepository = new GenerationRepository(locals.supabase);
+    const generationService = new GenerationService(openRouterService, generationRepository);
     const result = await generationService.generateFlashcards(body.source_text);
 
     return new Response(JSON.stringify(result), {

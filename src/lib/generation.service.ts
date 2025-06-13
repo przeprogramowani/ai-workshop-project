@@ -4,12 +4,11 @@
  * This module provides functionality for creating, processing, and storing flashcard generations.
  */
 
-import crypto from "crypto";
 import type { FlashcardProposalDto, GenerationCreateResponseDto } from "../types";
-import type { SupabaseClient } from "../db/supabase.client";
-import { DEFAULT_USER_ID } from "../db/mock-data";
 import { OpenRouterService } from "./openrouter.service";
 import { OpenRouterError } from "./openrouter.types";
+import { calculateHash } from "./utils";
+import type { GenerationRepository } from "./generation.repository";
 
 /**
  * Service class for handling flashcard generation using AI.
@@ -18,71 +17,30 @@ import { OpenRouterError } from "./openrouter.types";
  * including error handling, metadata storage, and generation logging.
  *
  * @requires OpenRouterService
- * @requires SupabaseClient
+ * @requires GenerationRepository
  *
  * @example
  * ```typescript
- * const generationService = new GenerationService(supabaseClient, { apiKey: 'your-openrouter-api-key' });
+ * const openRouterService = new OpenRouterService({ apiKey: 'your-key' });
+ * // configure openRouterService
+ * const generationRepository = new GenerationRepository(supabaseClient);
+ * const generationService = new GenerationService(openRouterService, generationRepository);
  * const result = await generationService.generateFlashcards('Your source text here');
  * ```
  */
 export class GenerationService {
-  private readonly openRouter: OpenRouterService;
   private readonly model = "openai/gpt-4o-mini";
 
   /**
    * Creates an instance of GenerationService.
    * @constructor
-   * @param {SupabaseClient} supabase - Supabase client instance for database operations
-   * @param {Object} [openRouterConfig] - Configuration object for OpenRouter
-   * @param {string} openRouterConfig.apiKey - OpenRouter API key
-   * @throws {Error} When OpenRouter API key is not provided
+   * @param {OpenRouterService} openRouter - An initialized and configured OpenRouterService instance
+   * @param {GenerationRepository} generationRepository - A repository for handling generation data
    */
   constructor(
-    private readonly supabase: SupabaseClient,
-    openRouterConfig?: { apiKey: string }
-  ) {
-    if (!openRouterConfig?.apiKey) {
-      throw new Error("OpenRouter API key is required");
-    }
-    this.openRouter = new OpenRouterService({
-      apiKey: openRouterConfig.apiKey,
-      timeout: 60000, // 60 seconds timeout for longer generations
-    });
-
-    // Configure OpenRouter
-    this.openRouter.setModel(this.model, {
-      temperature: 0.7,
-      top_p: 1,
-    });
-
-    this.openRouter
-      .setSystemMessage(`You are an AI assistant specialized in creating high-quality flashcards from provided text.
-Generate concise, clear, and effective flashcards that capture key concepts and knowledge.
-Each flashcard should have a front (question/prompt) and back (answer/explanation).
-Focus on important facts, definitions, concepts, and relationships.`);
-
-    this.openRouter.setResponseFormat({
-      name: "flashcards",
-      schema: {
-        type: "object",
-        properties: {
-          flashcards: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                front: { type: "string" },
-                back: { type: "string" },
-              },
-              required: ["front", "back"],
-            },
-          },
-        },
-        required: ["flashcards"],
-      },
-    });
-  }
+    private readonly openRouter: OpenRouterService,
+    private readonly generationRepository: GenerationRepository
+  ) {}
 
   /**
    * Generates flashcards from provided source text.
@@ -98,20 +56,21 @@ Focus on important facts, definitions, concepts, and relationships.`);
    * ```
    */
   async generateFlashcards(sourceText: string): Promise<GenerationCreateResponseDto> {
+    const sourceTextHash = calculateHash(sourceText);
     try {
       // 1. Calculate metadata
       const startTime = Date.now();
-      const sourceTextHash = await this.calculateHash(sourceText);
 
       // 2. Call AI service through OpenRouter
       const proposals = await this.callAIService(sourceText);
 
       // 3. Save generation metadata
-      const generationId = await this.saveGenerationMetadata({
+      const generationId = await this.generationRepository.saveGeneration({
         sourceText,
         sourceTextHash,
         generatedCount: proposals.length,
         durationMs: Date.now() - startTime,
+        model: this.model,
       });
 
       return {
@@ -121,22 +80,13 @@ Focus on important facts, definitions, concepts, and relationships.`);
       };
     } catch (error) {
       // Log error and save to generation_error_logs
-      await this.logGenerationError(error, {
-        sourceTextHash: await this.calculateHash(sourceText),
+      await this.generationRepository.logGenerationError(error, {
+        sourceTextHash: sourceTextHash,
         sourceTextLength: sourceText.length,
+        model: this.model,
       });
       throw error;
     }
-  }
-
-  /**
-   * Calculates MD5 hash of provided text.
-   * @private
-   * @param {string} text - Text to hash
-   * @returns {Promise<string>} MD5 hash of the text
-   */
-  private async calculateHash(text: string): Promise<string> {
-    return crypto.createHash("md5").update(text).digest("hex");
   }
 
   /**
@@ -177,68 +127,5 @@ Focus on important facts, definitions, concepts, and relationships.`);
       }
       throw new Error("An unknown error occurred in the AI service.");
     }
-  }
-
-  /**
-   * Saves generation metadata to the database.
-   * @private
-   * @param {Object} data - Generation metadata
-   * @param {string} data.sourceText - Original source text
-   * @param {string} data.sourceTextHash - Hash of the source text
-   * @param {number} data.generatedCount - Number of generated flashcards
-   * @param {number} data.durationMs - Generation duration in milliseconds
-   * @returns {Promise<number>} ID of the saved generation record
-   * @throws {Error} When database operation fails
-   */
-  private async saveGenerationMetadata(data: {
-    sourceText: string;
-    sourceTextHash: string;
-    generatedCount: number;
-    durationMs: number;
-  }): Promise<number> {
-    const { data: generation, error } = await this.supabase
-      .from("generations")
-      .insert({
-        user_id: DEFAULT_USER_ID,
-        source_text_hash: data.sourceTextHash,
-        source_text_length: data.sourceText.length,
-        generated_count: data.generatedCount,
-        generation_duration: data.durationMs,
-        model: this.model,
-      })
-      .select("id")
-      .single();
-
-    if (error) throw error;
-    return generation.id;
-  }
-
-  /**
-   * Logs generation errors to the database.
-   * @private
-   * @param {unknown} error - Error that occurred during generation
-   * @param {Object} data - Additional error context
-   * @param {string} data.sourceTextHash - Hash of the source text
-   * @param {number} data.sourceTextLength - Length of the source text
-   * @returns {Promise<void>}
-   */
-  private async logGenerationError(
-    error: unknown,
-    data: {
-      sourceTextHash: string;
-      sourceTextLength: number;
-    }
-  ): Promise<void> {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorCode = error instanceof Error ? error.name : "UNKNOWN";
-
-    await this.supabase.from("generation_error_logs").insert({
-      user_id: DEFAULT_USER_ID,
-      error_code: errorCode,
-      error_message: errorMessage,
-      model: this.model,
-      source_text_hash: data.sourceTextHash,
-      source_text_length: data.sourceTextLength,
-    });
   }
 }
