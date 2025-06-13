@@ -7,6 +7,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write ."
@@ -49,7 +51,9 @@
     "lint-staged": "15.5.0",
     "prettier-plugin-astro": "0.14.1",
     "supabase": "2.24.3",
-    "typescript-eslint": "8.28.0"
+    "typescript-eslint": "8.28.0",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.3"
   },
   "lint-staged": {
     "*.{ts,tsx,astro}": [
