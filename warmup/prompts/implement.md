@@ -1,11 +1,14 @@
-Zaimplementuj funkcjonalność banku w oparciu o poniższe wymagania:
+Zaimplementuj funkcjonalność banking.ts w oparciu o poniższe wymagania:
 
-<SPEC> </SPEC>
+<SPEC>
+</SPEC>
 
 Gotowa implementacja powinna być zgodna z testami:
 
-<TESTS> </TESTS>
+<TESTS>
+</TESTS>
 
 Dbaj o zgodność z typami TypeScript:
 
-<TYPES> </TYPES>
+<TYPES>
+</TYPES>
